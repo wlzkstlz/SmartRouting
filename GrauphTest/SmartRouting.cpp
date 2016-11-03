@@ -203,6 +203,7 @@ void CSmartRouting::RecognizeCorners()
 			key_node.location = mRoomContours[i][min_id];
 			key_node.room_id = i;
 			key_node.type = KNT_CORNER;
+			key_node.node_id = mKeyNodes.size();
 			mKeyNodes.push_back(key_node);
 		}
 
@@ -225,6 +226,8 @@ void CSmartRouting::RecognizeCorners()
 		imshow("RecognizeCorners", mat4show);
 		imwrite("RecognizeCorners.bmp", mat4show);
 		waitKey(-1);
+
+		mMat4Draw = mat4show;
 		}
 		/*4SHOW END*/
 }
