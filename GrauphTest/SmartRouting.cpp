@@ -214,7 +214,7 @@ void CSmartRouting::RecognizeCorners()
 
 	/*4SHOW*/
 		{
-		Mat mat4show = mSourceMat.clone();
+ 		Mat mat4show = mSourceMat.clone();
 		mat4show.setTo(Scalar::all(0));
 		drawContours(mat4show, mRoomContours, -1, Scalar(0, 255, 0));
 
@@ -227,7 +227,8 @@ void CSmartRouting::RecognizeCorners()
 		imwrite("RecognizeCorners.bmp", mat4show);
 		waitKey(-1);
 
-		mMat4Draw = mat4show;
+		cvtColor(mat4show, mMat4Draw, CV_BGR2GRAY);
+		//mMat4Draw = mat4show;
 		}
 		/*4SHOW END*/
 }

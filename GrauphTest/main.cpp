@@ -93,9 +93,14 @@ void main()
 
 	/*UI*/
 	Mat mat4show_base = Mat::zeros(smartRouting.mMat4Draw.size(), CV_8UC3);
+
+	cout << smartRouting.mMat4Draw.channels() << endl;
+	cout << mat4show_base.channels() << endl;
+
 	cvtColor(smartRouting.mMat4Draw, mat4show_base, CV_GRAY2BGR);
 	/*UI END*/
 
+	is_ui_data_ready = false;		
 	while (1)
 	{
 		/*UI*/
@@ -110,18 +115,48 @@ void main()
 			{
 				if (smartRouting.mACLocationsFromUI[i].x>=0&& smartRouting.mACLocationsFromUI[i].y >= 0)
 				{
-					circle(mat4show, smartRouting.mACLocationsFromUI[i], 8, Scalar(0, 255, 255), 2);
+					circle(mat4show, smartRouting.mACLocationsFromUI[i], 5, Scalar(0, 0, 255), 2);
 				}
 			}
 
 			imshow("UI", mat4show);
 
 			char a = waitKey(5);
+
+			switch (a)
+			{
+			case ' ':
+				/*g_ui_mode = UI_MODE_COMMIT;
+				if (g_borderUIPts.empty() == false)
+					smartRouting.SetBorderUIPts(g_borderUIPts);
+				if (g_mainTubeUIPts.empty() == false)
+					smartRouting.SetMainTubeUIPts(g_mainTubeUIPts);
+				is_ui_data_ready = true;*/
+				is_ui_data_ready = true;
+				break;
+
+			case 'C':
+				g_ui_mode = UI_MODE_AC_LOCATION;
+				break;
+			default:
+				break;
+			}
+
+					
 		}
-
-
 		/*UI END*/
+
+		if (is_ui_data_ready)
+		{
+			break;
+		}
 	}
+
+
+
+
+
+
 }
 
 void on_mouse(int event, int x, int y, int flags, void *ustc)
