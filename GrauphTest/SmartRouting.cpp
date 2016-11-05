@@ -1,11 +1,13 @@
 #include"SmartRouting.h"
-
+#include"commonAlg.h"
 
 #define MAX_ROOM_NUM		25//支持最大房间数目
 #define REGION_ROOM_VALUE_STEP	(255/MAX_ROOM_NUM)
 
 #define		CORNER_SEARCH_RANGE		(4*ROOM_BORDER_PANT_WIDTH)
 #define		CORNER_CLUSTER_RANGE		(4*ROOM_BORDER_PANT_WIDTH)
+
+#define		MAIN_TUBE_DISCRETE_STEP		4.0
 
 CSmartRouting::CSmartRouting()
 {
@@ -231,4 +233,71 @@ void CSmartRouting::RecognizeCorners()
 		//mMat4Draw = mat4show;
 		}
 		/*4SHOW END*/
+}
+
+void CSmartRouting::RecognizeMainTubeEnds()
+{
+	//【1】离散主管道点列	
+	for (size_t i = 1; i < mMainTubeUIPts.size(); i++)
+	{
+		mMainTubeDiscretePts.push_back(mMainTubeUIPts[i - 1]);
+		double angel = CCommonAlg::calcVectAngel((double)(mMainTubeUIPts[i].x - mMainTubeUIPts[i - 1].x), (double)(mMainTubeUIPts[i].y - mMainTubeUIPts[i - 1].y));
+		double distance = sqrt(pow(mMainTubeUIPts[i].x - mMainTubeUIPts[i - 1].x, 2) + pow(mMainTubeUIPts[i].y - mMainTubeUIPts[i - 1].y, 2));
+		double temp = MAIN_TUBE_DISCRETE_STEP;
+		for (; temp < distance; temp += MAIN_TUBE_DISCRETE_STEP)
+		{
+			Point pt = mMainTubeUIPts[i - 1];
+			pt.x += temp*cos(angel);
+			pt.y += temp*sin(angel);
+			mMainTubeDiscretePts.push_back(pt);
+		}
+	}
+
+	//【2】判断离散点是否处于墙上
+	Mat mat4draw = mMat4Draw.clone();
+	mat4draw.setTo(Scalar(0));
+	for (size_t i = 0; i < mBorderUIPts.size(); i++)
+		for (size_t j = 1; j < mBorderUIPts[i].size(); j++)
+			line(mat4draw, mBorderUIPts[i][j - 1], mBorderUIPts[i][j], Scalar(255), ROOM_BORDER_PANT_WIDTH);
+
+	mMainTubeOnWallPts.reserve(mMainTubeDiscretePts.size());
+	for (size_t i = 0; i < mMainTubeDiscretePts.size(); i++)
+	{
+		uchar*data = mat4draw.ptr<uchar>(mMainTubeDiscretePts[i].y);
+		mMainTubeOnWallPts.push_back((bool)(data[mMainTubeDiscretePts[i].x]>127));
+	}
+
+	//【3】找出端点
+	bool pre_on_wall = false;
+	for (size_t i = 0; i<mMainTubeOnWallPts.size(); i++)
+	{
+		if (mMainTubeOnWallPts[i]!= pre_on_wall)
+		{
+			pre_on_wall = mMainTubeOnWallPts[i];
+			mMainTubeEndPts.push_back(mMainTubeDiscretePts[i]);
+		}
+	}
+
+	/*4SHOW*/
+	namedWindow("RecognizeMainTubeEnds", CV_WINDOW_FREERATIO);
+	Mat mat4show_color = Mat::zeros(mat4draw.size(), CV_8UC3);
+	cvtColor(mat4draw, mat4show_color, CV_GRAY2BGR);
+	
+
+
+	for (size_t i = 0; i < mMainTubeDiscretePts.size(); i++)
+	{
+		circle(mat4show_color, mMainTubeDiscretePts[i], 1, Scalar(0, 255, 0));
+	}
+
+	for (size_t i = 0; i < mMainTubeEndPts.size(); i++)
+	{
+		circle(mat4show_color, mMainTubeEndPts[i], 2, Scalar(0, 0, 255));
+	}
+
+	imshow("RecognizeMainTubeEnds", mat4show_color);
+	imwrite("RecognizeMainTubeEnds.bmp", mat4show_color);
+	waitKey(-1);
+
+	/*4SHOW END*/
 }

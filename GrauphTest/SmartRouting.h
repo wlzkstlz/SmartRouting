@@ -39,11 +39,16 @@ public:
 
 	void RecognizeCorners();
 
+	void RecognizeMainTubeEnds();
+
 public:
 	Mat mSourceMat;
 	Mat mMat4Draw;
 	vector<vector<Point>>mBorderUIPts;
 	vector<Point>mMainTubeUIPts;
+	vector<Point>mMainTubeDiscretePts;
+	vector<bool>mMainTubeOnWallPts;
+	vector<Point>mMainTubeEndPts;
 
 	vector<vector<Point>>mRoomContours;//所有房间最大内墙轮廓
 	vector<Mat>mRoomRegions;
@@ -53,6 +58,14 @@ public:
 	vector<Point>mACLocationsFromUI;//(-1,-1)stands for undifined!
 
 	vector<TKeyNode>mKeyNodes;
+
+
+//public:
+//	vector<bool>mIsSolved;//是否已完成设计
+
+	//图数据结构
+public:
+	vector<Point>***mConectiveEdges;// [mNodeSize][mNodeSize];//邻接矩阵
 
 };
 

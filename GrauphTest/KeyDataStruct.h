@@ -6,7 +6,7 @@ enum KeyNodeType
 {
 	KNT_AC,
 	KNT_CORNER,
-	KNT_MAINTUBE
+	KNT_MAIN_TUBE_END
 };
 struct TKeyNode
 {
@@ -14,4 +14,5 @@ struct TKeyNode
 	Point location;
 	int room_id;//belong to which room
 	KeyNodeType type;
+	bool is_done;
 };

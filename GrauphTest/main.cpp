@@ -18,12 +18,14 @@ vector<Point>g_mainTubeUIPts;
 
 bool is_ui_data_ready = false;
 
+Point g_mouse_pt;
 void on_mouse(int event, int x, int y, int flags, void *ustc);
 
 int g_region_selected_id = -1;
 
 void main()
 {
+	//【1】读取原图
 	CSmartRouting smartRouting;
 	smartRouting.ReadSourceImg("test.bmp");
 
@@ -37,7 +39,7 @@ void main()
 	}
 	/*UI END*/
 
-
+	//【2】UI输入描边和主管
 	while (1)
 	{
 		/*UI*/
@@ -52,6 +54,9 @@ void main()
 
 			for (size_t i = 1; i < g_mainTubeUIPts.size(); i++)
 				line(mat4show, g_mainTubeUIPts[i - 1], g_mainTubeUIPts[i], Scalar(0, 0, 255), ROOM_BORDER_PANT_WIDTH);
+
+			for (size_t i = 1; i < smartRouting.mMainTubeUIPts.size(); i++)
+				line(mat4show, smartRouting.mMainTubeUIPts[i - 1], smartRouting.mMainTubeUIPts[i], Scalar(0, 0, 255), ROOM_BORDER_PANT_WIDTH);
 
 			imshow("UI", mat4show);
 
@@ -88,18 +93,19 @@ void main()
 			break;
 	}
 
+	//【3】识别房间和墙角拐点
 	smartRouting.RecognizeRooms();
 	smartRouting.RecognizeCorners();
 
+	//【4】识别主管KNT_MAIN_TUBE_END
+	smartRouting.RecognizeMainTubeEnds();
+
 	/*UI*/
 	Mat mat4show_base = Mat::zeros(smartRouting.mMat4Draw.size(), CV_8UC3);
-
-	cout << smartRouting.mMat4Draw.channels() << endl;
-	cout << mat4show_base.channels() << endl;
-
 	cvtColor(smartRouting.mMat4Draw, mat4show_base, CV_GRAY2BGR);
 	/*UI END*/
 
+	//【5】UI输入AC位置
 	is_ui_data_ready = false;		
 	while (1)
 	{
@@ -115,7 +121,10 @@ void main()
 			{
 				if (smartRouting.mACLocationsFromUI[i].x>=0&& smartRouting.mACLocationsFromUI[i].y >= 0)
 				{
-					circle(mat4show, smartRouting.mACLocationsFromUI[i], 5, Scalar(0, 0, 255), 2);
+					if (i== g_region_selected_id)
+						circle(mat4show, smartRouting.mACLocationsFromUI[i], 5, Scalar(0, 0, 255), 2);
+					else
+						circle(mat4show, smartRouting.mACLocationsFromUI[i], 5, Scalar(0, 0, 0), 2);
 				}
 			}
 
@@ -162,6 +171,9 @@ void main()
 void on_mouse(int event, int x, int y, int flags, void *ustc)
 {
 	CSmartRouting*smartRouting = (CSmartRouting*)ustc;
+
+	g_mouse_pt.x = x;
+	g_mouse_pt.y = y;
 	switch (g_ui_mode)
 	{
 	case UI_MODE_BORDER_AB:
