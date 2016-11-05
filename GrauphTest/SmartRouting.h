@@ -41,23 +41,28 @@ public:
 
 	void RecognizeMainTubeEnds();
 
+	void RecognizeACLocation();
+
+	void ShowResult();
 public:
 	Mat mSourceMat;
 	Mat mMat4Draw;
 	vector<vector<Point>>mBorderUIPts;
 	vector<Point>mMainTubeUIPts;
 	vector<Point>mMainTubeDiscretePts;
-	vector<bool>mMainTubeOnWallPts;
-	vector<Point>mMainTubeEndPts;
+	
+	
 
-	vector<vector<Point>>mRoomContours;//所有房间最大内墙轮廓
+	vector<vector<Point>>mRoomContours;//【关键数据】所有房间最大内墙轮廓
 	vector<Mat>mRoomRegions;
 	//Mat mOutOfAllRoomRegion;
 	//Mat mAllInOneRegion;
 
 	vector<Point>mACLocationsFromUI;//(-1,-1)stands for undifined!
 
-	vector<TKeyNode>mKeyNodes;
+
+
+	vector<TKeyNode>mKeyNodes;//【关键数据】
 
 
 //public:

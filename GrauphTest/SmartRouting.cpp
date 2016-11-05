@@ -7,7 +7,7 @@
 #define		CORNER_SEARCH_RANGE		(4*ROOM_BORDER_PANT_WIDTH)
 #define		CORNER_CLUSTER_RANGE		(4*ROOM_BORDER_PANT_WIDTH)
 
-#define		MAIN_TUBE_DISCRETE_STEP		4.0
+#define		MAIN_TUBE_DISCRETE_STEP		2.0
 
 CSmartRouting::CSmartRouting()
 {
@@ -137,17 +137,6 @@ void CSmartRouting::RecognizeCorners()
 								region_types.push_back(int(k));
 						}
 					}
-
-					/*char*data = mOutOfAllRoomRegion.ptr<char>(yy);
-					if (data[xx] > 127)
-					{
-						bool is_new = true;
-						for (int q = 0; q < region_types.size(); q++)
-							if (region_types[q] == -1)
-								is_new = false;
-						if (is_new)
-							region_types.push_back(int(-1));
-					}*/
 				}
 			}
 
@@ -204,13 +193,11 @@ void CSmartRouting::RecognizeCorners()
 
 			key_node.location = mRoomContours[i][min_id];
 			key_node.room_id = i;
+			key_node.contour_id = min_id;
 			key_node.type = KNT_CORNER;
 			key_node.node_id = mKeyNodes.size();
 			mKeyNodes.push_back(key_node);
 		}
-
-		
-
 		delete is_corner_like;
 	}
 
@@ -260,44 +247,160 @@ void CSmartRouting::RecognizeMainTubeEnds()
 		for (size_t j = 1; j < mBorderUIPts[i].size(); j++)
 			line(mat4draw, mBorderUIPts[i][j - 1], mBorderUIPts[i][j], Scalar(255), ROOM_BORDER_PANT_WIDTH);
 
-	mMainTubeOnWallPts.reserve(mMainTubeDiscretePts.size());
+	vector<bool>is_wall_pts;
+	is_wall_pts.reserve(mMainTubeDiscretePts.size());
 	for (size_t i = 0; i < mMainTubeDiscretePts.size(); i++)
 	{
 		uchar*data = mat4draw.ptr<uchar>(mMainTubeDiscretePts[i].y);
-		mMainTubeOnWallPts.push_back((bool)(data[mMainTubeDiscretePts[i].x]>127));
+		is_wall_pts.push_back((bool)(data[mMainTubeDiscretePts[i].x]>127));
 	}
 
 	//【3】找出端点
 	bool pre_on_wall = false;
-	for (size_t i = 0; i<mMainTubeOnWallPts.size(); i++)
+	vector<bool>is_end_pts;
+	is_end_pts.reserve(mMainTubeDiscretePts.size());
+	for (size_t i = 0; i<is_wall_pts.size(); i++)
 	{
-		if (mMainTubeOnWallPts[i]!= pre_on_wall)
+		bool is_end_pt = false;
+		if (is_wall_pts[i]!= pre_on_wall)
 		{
-			pre_on_wall = mMainTubeOnWallPts[i];
-			mMainTubeEndPts.push_back(mMainTubeDiscretePts[i]);
+			pre_on_wall = is_wall_pts[i];
+			is_end_pt = true;
+		}
+
+		is_end_pts.push_back(is_end_pt);
+	}
+
+	//【4】生成TKeyNode
+	for (size_t i = 0; i < is_end_pts.size(); i++)
+	{
+		if (is_end_pts[i])
+		{
+			int room_id = -1;
+			int contour_id = -1;
+			double min_dist = 100000.0;
+			for (size_t j = 0; j < mRoomContours.size(); j++)
+			{
+				for (size_t k = 0; k < mRoomContours[j].size(); k++)
+				{
+					double dist = sqrt(pow(mRoomContours[j][k].x- mMainTubeDiscretePts[i].x,2) + pow(mRoomContours[j][k].y - mMainTubeDiscretePts[i].y, 2));
+					if (dist<min_dist)
+					{
+						min_dist = dist;
+						room_id = j;
+						contour_id = k;
+					}
+				}
+			}
+
+			if (room_id>=0)
+			{
+				TKeyNode key_node;
+				key_node.location = mRoomContours[room_id][contour_id];
+				key_node.room_id = room_id;
+				key_node.contour_id = contour_id;
+				key_node.main_tube_discrete_id = i;
+				key_node.type = KeyNodeType::KNT_MAIN_TUBE_END;
+				key_node.node_id = mKeyNodes.size();
+				mKeyNodes.push_back(key_node);
+			}
 		}
 	}
 
 	/*4SHOW*/
-	namedWindow("RecognizeMainTubeEnds", CV_WINDOW_FREERATIO);
-	Mat mat4show_color = Mat::zeros(mat4draw.size(), CV_8UC3);
-	cvtColor(mat4draw, mat4show_color, CV_GRAY2BGR);
-	
-
-
-	for (size_t i = 0; i < mMainTubeDiscretePts.size(); i++)
 	{
-		circle(mat4show_color, mMainTubeDiscretePts[i], 1, Scalar(0, 255, 0));
+		namedWindow("RecognizeMainTubeEnds", CV_WINDOW_FREERATIO);
+		Mat mat4show_color = Mat::zeros(mat4draw.size(), CV_8UC3);
+		cvtColor(mat4draw, mat4show_color, CV_GRAY2BGR);
+
+		for (size_t i = 0; i < mMainTubeDiscretePts.size(); i++)
+			circle(mat4show_color, mMainTubeDiscretePts[i], 1, Scalar(0, 255, 0));
+
+		for (size_t i = 0; i < mKeyNodes.size(); i++)
+			if (mKeyNodes[i].type== KeyNodeType::KNT_MAIN_TUBE_END)
+				circle(mat4show_color, mKeyNodes[i].location, 2, Scalar(0, 0, 255));
+
+		imshow("RecognizeMainTubeEnds", mat4show_color);
+		imwrite("RecognizeMainTubeEnds.bmp", mat4show_color);
+		waitKey(-1);
 	}
-
-	for (size_t i = 0; i < mMainTubeEndPts.size(); i++)
-	{
-		circle(mat4show_color, mMainTubeEndPts[i], 2, Scalar(0, 0, 255));
-	}
-
-	imshow("RecognizeMainTubeEnds", mat4show_color);
-	imwrite("RecognizeMainTubeEnds.bmp", mat4show_color);
-	waitKey(-1);
-
 	/*4SHOW END*/
+}
+
+void CSmartRouting::RecognizeACLocation()
+{
+	for (size_t i = 0; i < mACLocationsFromUI.size()-1; i++)
+	{
+		int contour_id = -1;
+		double min_dist = 100000.0;
+
+		for (size_t j = 0; j < mRoomContours[i].size(); j++)
+		{
+			double dist = sqrt(pow(mRoomContours[i][j].x- mACLocationsFromUI[i].x,2)+pow(mRoomContours[i][j].y - mACLocationsFromUI[i].y, 2));
+			if (dist<min_dist)
+			{
+				min_dist = dist;
+				contour_id = j;
+			}
+		}
+
+		if (contour_id>=0)
+		{
+			TKeyNode key_node;
+			key_node.location = mRoomContours[i][contour_id];
+			key_node.room_id = i;
+			key_node.contour_id = contour_id;
+			key_node.type = KeyNodeType::KNT_AC;
+			key_node.node_id = mKeyNodes.size();
+			mKeyNodes.push_back(key_node);
+		}
+
+	}
+}
+
+void CSmartRouting::ShowResult()
+{
+	namedWindow("ShowResult", CV_WINDOW_FREERATIO);
+	Mat mat4show_color = Mat::zeros(mMat4Draw.size(), CV_8UC3);
+	
+	//1.画房间区域
+	for (size_t i = 0; i < mRoomRegions.size(); i++)
+		mat4show_color.setTo(Scalar::all(127), mRoomRegions[i]);
+
+	//2.画描边线条
+	for (size_t i = 0; i < mBorderUIPts.size(); i++)
+		for (size_t j = 1; j < mBorderUIPts[i].size(); j++)
+			line(mat4show_color, mBorderUIPts[i][j - 1], mBorderUIPts[i][j], Scalar(0, 255, 0), ROOM_BORDER_PANT_WIDTH);
+
+	//3.画主管道线条
+	for (size_t i = 1; i < mMainTubeUIPts.size(); i++)
+		line(mat4show_color, mMainTubeUIPts[i- 1], mMainTubeUIPts[i], Scalar(0, 0, 255), ROOM_BORDER_PANT_WIDTH);
+
+	//4.画空调标记位置
+	for (size_t i = 0; i < mACLocationsFromUI.size(); i++)
+		circle(mat4show_color,mACLocationsFromUI[i], 5,Scalar(0x98, 0xfb, 0x98), 1);
+
+	//5.画关键点位置
+	for (size_t i = 0; i < mKeyNodes.size(); i++)
+	{
+		switch (mKeyNodes[i].type)
+		{
+		case KeyNodeType::KNT_CORNER:
+			circle(mat4show_color, mKeyNodes[i].location, 3, Scalar(0xcd, 0x00, 0xcd), 1);
+			break;
+		case KeyNodeType::KNT_AC :
+			circle(mat4show_color, mKeyNodes[i].location, 3, Scalar(0xd4, 0xff, 0x7f), 1);
+			break;
+		case KeyNodeType::KNT_MAIN_TUBE_END :
+			circle(mat4show_color, mKeyNodes[i].location, 3, Scalar(0x8e, 0x38, 0x8e), 1);
+			break;
+		default:
+			break;
+		}
+	}
+
+	//6显示与存储图片
+	imshow("ShowResult", mat4show_color);
+	imwrite("ShowResult.bmp", mat4show_color);
+	waitKey(-1);
 }

@@ -161,11 +161,9 @@ void main()
 		}
 	}
 
-
-
-
-
-
+	//【6】识别AC 关键点
+	smartRouting.RecognizeACLocation();
+	smartRouting.ShowResult();
 }
 
 void on_mouse(int event, int x, int y, int flags, void *ustc)
