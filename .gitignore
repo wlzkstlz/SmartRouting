@@ -216,3 +216,4 @@ SDKInterface/objs/*
 ehthumbs.db
 Icon?
 Thumbs.db
+*.sln
