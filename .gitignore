@@ -51,6 +51,7 @@ build/
 *.log
 *.scc
 
+*.jpg
 *.bmp
 *.suo
 *.db

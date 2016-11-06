@@ -1,6 +1,9 @@
 #include"SmartRouting.h"
 #include"commonAlg.h"
 
+#include"iostream"
+using namespace std;
+
 #define MAX_ROOM_NUM		25//支持最大房间数目
 #define REGION_ROOM_VALUE_STEP	(255/MAX_ROOM_NUM)
 
@@ -9,12 +12,25 @@
 
 #define		MAIN_TUBE_DISCRETE_STEP		2.0
 
+#define		INT_INFINITY	1000000
+
+#define		DIST_THRESHOLD_BETWEEN_ROOMS_KN	(ROOM_BORDER_PANT_WIDTH*8.0)//不同房间节点被认为可以直接穿墙连接的距离阈值
+
+#define		DIST_THRESHOLD_CLOSE_TO_MAIN_TUBE	(ROOM_BORDER_PANT_WIDTH*8.0)//认为空调与主管同贴一堵墙的距离阈值
+
 CSmartRouting::CSmartRouting()
 {
 }
 
 CSmartRouting::~CSmartRouting()
 {
+	if (mConnectiveMatrix)
+	{
+		for (size_t i = 0; i < mKeyNodes.size(); i++)
+			if (mConnectiveMatrix[i])
+				delete mConnectiveMatrix[i];
+		delete mConnectiveMatrix;
+	}
 }
 
 void CSmartRouting::ReadSourceImg(const char*file_name)
@@ -25,12 +41,6 @@ void CSmartRouting::ReadSourceImg(const char*file_name)
 
 void CSmartRouting::RecognizeRooms()
 {
-	/*4SHOW*/
-	{
-		namedWindow("RecognizeRooms", CV_WINDOW_FREERATIO);
-	}
-	/*4SHOW END*/
-
 	//【1】draw mBorderUIPts
 	mMat4Draw.setTo(Scalar::all(255));
 	for (size_t i = 0; i < mBorderUIPts.size(); i++)
@@ -39,6 +49,7 @@ void CSmartRouting::RecognizeRooms()
 
 	/*4SHOW*/
 	{
+		namedWindow("RecognizeRooms", CV_WINDOW_FREERATIO);
 		imshow("RecognizeRooms", mMat4Draw);
 		waitKey(-1);
 	}
@@ -61,13 +72,6 @@ void CSmartRouting::RecognizeRooms()
 				child_id = h[child_id][0];
 			}
 
-			/*4SHOW*/
-			{
-				imshow("RecognizeRooms", mMat4Draw);
-				waitKey(-1);
-			}
-			/*4SHOW END*/
-
 			mRoomContours.push_back(contours[i]);
 			Mat region = mMat4Draw.clone();
 			
@@ -89,10 +93,7 @@ void CSmartRouting::RecognizeRooms()
 		}
 	}
 
-	/*vector<vector<Point>>::iterator it_contour = mRoomContours.begin() + max_id;
-	vector<Mat>::iterator it_region = mRoomRegions.begin() + max_id;*/
-
-	//将最外轮廓放到最后
+	//【3】将最外轮廓放到最后
 	vector<Point> temp_contour = mRoomContours[max_id];
 	mRoomContours[max_id] = mRoomContours.back();
 	mRoomContours.back() = temp_contour;
@@ -279,7 +280,7 @@ void CSmartRouting::RecognizeMainTubeEnds()
 			int room_id = -1;
 			int contour_id = -1;
 			double min_dist = 100000.0;
-			for (size_t j = 0; j < mRoomContours.size(); j++)
+			for (size_t j = 0; j < mRoomContours.size()-1; j++)
 			{
 				for (size_t k = 0; k < mRoomContours[j].size(); k++)
 				{
@@ -331,30 +332,58 @@ void CSmartRouting::RecognizeACLocation()
 {
 	for (size_t i = 0; i < mACLocationsFromUI.size()-1; i++)
 	{
-		int contour_id = -1;
-		double min_dist = 100000.0;
-
-		for (size_t j = 0; j < mRoomContours[i].size(); j++)
+		if (mACLocationsFromUI[i].x >= 0 && mACLocationsFromUI[i].y >= 0)
 		{
-			double dist = sqrt(pow(mRoomContours[i][j].x- mACLocationsFromUI[i].x,2)+pow(mRoomContours[i][j].y - mACLocationsFromUI[i].y, 2));
-			if (dist<min_dist)
+			int contour_id = -1;
+			double min_dist = 100000.0;
+
+			for (size_t j = 0; j < mRoomContours[i].size(); j++)
 			{
-				min_dist = dist;
-				contour_id = j;
+			
+					double dist = sqrt(pow(mRoomContours[i][j].x- mACLocationsFromUI[i].x,2)+pow(mRoomContours[i][j].y - mACLocationsFromUI[i].y, 2));
+					if (dist<min_dist)
+					{
+						min_dist = dist;
+						contour_id = j;
+					}
+			}
+
+			if (contour_id>=0)
+			{
+				TKeyNode key_node;
+				key_node.location = mRoomContours[i][contour_id];
+				key_node.room_id = i;
+				key_node.contour_id = contour_id;
+				key_node.type = KeyNodeType::KNT_AC;
+				key_node.node_id = mKeyNodes.size();
+				mKeyNodes.push_back(key_node);
 			}
 		}
+	}
+}
 
-		if (contour_id>=0)
+void CSmartRouting::CheckIsCloseToMainTube()
+{
+	for (size_t i = 0; i < mKeyNodes.size(); i++)
+	{
+		if (mKeyNodes[i].type== KeyNodeType::KNT_AC)
 		{
-			TKeyNode key_node;
-			key_node.location = mRoomContours[i][contour_id];
-			key_node.room_id = i;
-			key_node.contour_id = contour_id;
-			key_node.type = KeyNodeType::KNT_AC;
-			key_node.node_id = mKeyNodes.size();
-			mKeyNodes.push_back(key_node);
-		}
+			int min_id = -1;
+			double min_dist = 1000000.0;
+			for (size_t j = 0; j < mMainTubeDiscretePts.size(); j++)
+			{
+				double distance = sqrt(pow(mMainTubeDiscretePts[j].x-mKeyNodes[i].location.x,2)+
+					pow(mMainTubeDiscretePts[j].y - mKeyNodes[i].location.y, 2));
+				if (distance<min_dist)
+				{
+					min_dist = distance;
+					min_id = j;
+				}
+			}
 
+			if (min_dist<DIST_THRESHOLD_CLOSE_TO_MAIN_TUBE)
+				mKeyNodes[i].close_to_maintube_id = min_id;
+		}
 	}
 }
 
@@ -377,12 +406,14 @@ void CSmartRouting::ShowResult()
 		line(mat4show_color, mMainTubeUIPts[i- 1], mMainTubeUIPts[i], Scalar(0, 0, 255), ROOM_BORDER_PANT_WIDTH);
 
 	//4.画空调标记位置
-	for (size_t i = 0; i < mACLocationsFromUI.size(); i++)
-		circle(mat4show_color,mACLocationsFromUI[i], 5,Scalar(0x98, 0xfb, 0x98), 1);
+	for (size_t i = 0; i < mACLocationsFromUI.size()-1; i++)
+		if (mACLocationsFromUI[i].x >= 0 && mACLocationsFromUI[i].y >= 0)
+			circle(mat4show_color, mACLocationsFromUI[i], 5, Scalar(0x98, 0xfb, 0x98), 1);
 
 	//5.画关键点位置
 	for (size_t i = 0; i < mKeyNodes.size(); i++)
 	{
+		cout << "mKeyNodes[" << mKeyNodes[i].node_id << "]:type=" << mKeyNodes[i].type << ";	 room_id = " << mKeyNodes[i].room_id << ";	contour_id = " << mKeyNodes[i].contour_id << ";	location = " << mKeyNodes[i].location << ";	main_tube_discrete_id=" << mKeyNodes[i].main_tube_discrete_id << endl;
 		switch (mKeyNodes[i].type)
 		{
 		case KeyNodeType::KNT_CORNER:
@@ -403,4 +434,205 @@ void CSmartRouting::ShowResult()
 	imshow("ShowResult", mat4show_color);
 	imwrite("ShowResult.bmp", mat4show_color);
 	waitKey(-1);
+}
+
+void CSmartRouting::CreateConnectiveMatrix()
+{
+	//【1】申请内存并初始化邻接矩阵
+	mConnectiveMatrix = new int*[mKeyNodes.size()];
+	for (size_t i = 0; i < mKeyNodes.size(); i++)
+	{
+		mConnectiveMatrix[i] = new int[mKeyNodes.size()];
+		for (size_t j = 0; j < mKeyNodes.size(); j++)
+			mConnectiveMatrix[i][j] = INT_INFINITY;
+	}
+
+	//【2】生成邻接矩阵值
+	//4 test
+	int total = 0;
+
+	for (size_t i = 0; i < mKeyNodes.size(); i++)
+	{
+		cout << "【" << i<<"】";
+		for (size_t j = 0; j < mKeyNodes.size(); j++)
+		{
+			if (i==j)
+				mConnectiveMatrix[i][j] = 0;
+			else if (mKeyNodes[i].room_id==mKeyNodes[j].room_id)//同一个房间内部节点
+			{
+				int id_s = mKeyNodes[j].contour_id < mKeyNodes[i].contour_id ? mKeyNodes[j].contour_id : mKeyNodes[i].contour_id;
+				int id_l = mKeyNodes[j].contour_id > mKeyNodes[i].contour_id ? mKeyNodes[j].contour_id : mKeyNodes[i].contour_id;
+				int increase_dist = id_l - id_s;
+				int decrease_dist = mRoomContours[mKeyNodes[i].room_id].size()- increase_dist;
+				mConnectiveMatrix[i][j] = increase_dist < decrease_dist ? increase_dist : -decrease_dist;//负数代表ID递减距离更近
+			}
+			else
+			{
+				double distance = sqrt(pow(mKeyNodes[i].location.x- mKeyNodes[j].location.x,2)+
+					pow(mKeyNodes[i].location.y - mKeyNodes[j].location.y, 2));
+				if (distance < DIST_THRESHOLD_BETWEEN_ROOMS_KN)//不同房间非常靠近的两个点可以穿墙连接
+				{
+					mConnectiveMatrix[i][j] = 1;
+					total++;
+				}
+			}
+
+			cout << mConnectiveMatrix[i][j] << ",	";
+			
+		}
+
+		cout << ";" << endl;
+	}
+
+	cout << "total=" << total << endl;
+
+}
+
+void CSmartRouting::SolveShortestPathProblem()
+{
+	for (size_t i = 0; i < mKeyNodes.size(); i++)
+	{
+		if (mKeyNodes[i].type== KeyNodeType::KNT_AC&&mKeyNodes[i].close_to_maintube_id==-1)
+		{
+			mKeyNodes[i].path_list = new int[mKeyNodes.size()];
+			mKeyNodes[i].dist_list = new int[mKeyNodes.size()];
+			ShortestPath_Dijkstra(mKeyNodes.size(),i,mConnectiveMatrix, mKeyNodes[i].path_list, mKeyNodes[i].dist_list);
+
+			int min_id = -1;
+			int min_dist = INT_INFINITY;
+			for (size_t j = 0; j < mKeyNodes.size(); j++)
+			{
+				if (mKeyNodes[j].type == KeyNodeType::KNT_MAIN_TUBE_END)
+				{
+					if (mKeyNodes[i].dist_list[j]<min_dist)
+					{
+						min_dist = mKeyNodes[i].dist_list[j];
+						min_id = j;
+					}
+				}
+			}
+
+			mKeyNodes[i].closest_maintube_end_id = min_id;
+		}
+	}
+}
+
+void CSmartRouting::ShowShortestPaths()
+{
+	namedWindow("ShowShortestPaths", CV_WINDOW_FREERATIO);
+	Mat mat4show_color = Mat::zeros(mMat4Draw.size(), CV_8UC3);
+
+	//1.画房间区域
+	for (size_t i = 0; i < mRoomRegions.size(); i++)
+		mat4show_color.setTo(Scalar::all(127), mRoomRegions[i]);
+
+	//2.画描边线条
+	for (size_t i = 0; i < mBorderUIPts.size(); i++)
+		for (size_t j = 1; j < mBorderUIPts[i].size(); j++)
+			line(mat4show_color, mBorderUIPts[i][j - 1], mBorderUIPts[i][j], Scalar(0, 255, 0), ROOM_BORDER_PANT_WIDTH);
+
+	//3.画主管道线条
+	for (size_t i = 1; i < mMainTubeUIPts.size(); i++)
+		line(mat4show_color, mMainTubeUIPts[i - 1], mMainTubeUIPts[i], Scalar(0, 0, 255), ROOM_BORDER_PANT_WIDTH);
+
+	//4.画空调标记位置
+	for (size_t i = 0; i < mACLocationsFromUI.size() - 1; i++)
+		if (mACLocationsFromUI[i].x >= 0 && mACLocationsFromUI[i].y >= 0)
+			circle(mat4show_color, mACLocationsFromUI[i], 5, Scalar(0x98, 0xfb, 0x98), 1);
+
+	//5.画管道路径
+	for (size_t i = 0; i < mKeyNodes.size(); i++)
+	{
+		if (mKeyNodes[i].type== KeyNodeType::KNT_AC)//对每个室内机
+		{
+			//与主管端点连接
+			if (mKeyNodes[i].closest_maintube_end_id>=0)
+			{
+				int middle_node_id = mKeyNodes[i].closest_maintube_end_id;
+				while (middle_node_id!=i)
+				{
+					int pre_node_id = mKeyNodes[i].path_list[middle_node_id];
+					if (pre_node_id < 0)
+						break;
+
+					if (mConnectiveMatrix[middle_node_id][pre_node_id]==1)
+						line(mat4show_color, mKeyNodes[middle_node_id].location, mKeyNodes[pre_node_id].location,Scalar(255,0,0),2);
+					else
+					{
+						int contour_id_s = mKeyNodes[middle_node_id].contour_id < mKeyNodes[pre_node_id].contour_id ? 
+							mKeyNodes[middle_node_id].contour_id : mKeyNodes[pre_node_id].contour_id;
+						int contour_id_l = mKeyNodes[middle_node_id].contour_id > mKeyNodes[pre_node_id].contour_id ? 
+							mKeyNodes[middle_node_id].contour_id : mKeyNodes[pre_node_id].contour_id;
+						if (mConnectiveMatrix[middle_node_id][pre_node_id]>0)
+							for (size_t j = contour_id_s+1; j <contour_id_l; j++)
+								line(mat4show_color, mRoomContours[mKeyNodes[middle_node_id].room_id][j-1],
+									mRoomContours[mKeyNodes[middle_node_id].room_id][j ], Scalar(255, 0, 0), 2);
+						else
+						{
+							int cur_id = contour_id_l;
+							int next_id = (cur_id + 1) % mRoomContours[mKeyNodes[middle_node_id].room_id].size();
+							while (cur_id != contour_id_s)
+							{
+								line(mat4show_color, mRoomContours[mKeyNodes[middle_node_id].room_id][cur_id],
+									mRoomContours[mKeyNodes[middle_node_id].room_id][next_id], Scalar(255, 0, 0), 2);
+								cur_id = next_id;
+								next_id= (cur_id + 1) % mRoomContours[mKeyNodes[middle_node_id].room_id].size();
+							}
+						}
+					}
+					middle_node_id = pre_node_id;
+				}
+			}
+			//与主管端穿墙连接
+			else if (mKeyNodes[i].close_to_maintube_id>=0)
+				line(mat4show_color, mKeyNodes[i].location,mMainTubeDiscretePts[mKeyNodes[i].close_to_maintube_id], Scalar(255, 0, 0), 2);
+
+			imshow("ShowShortestPaths", mat4show_color);
+			waitKey(-1);
+		}
+	}
+
+	//6显示与存储图片
+	imshow("ShowShortestPaths", mat4show_color);
+	imwrite("ShowShortestPaths.bmp", mat4show_color);
+	waitKey(-1);
+}
+
+
+void CSmartRouting::ShortestPath_Dijkstra(int size, int v0, int** matrix, int*P, int *D)
+{
+	int v, w, k, min;
+	bool *final=new bool[size];
+	for (size_t v = 0; v < size; v++)
+	{
+		final[v] = false;
+		D[v] = abs(matrix[v0][v]);
+		P[v] =v0;
+	}
+
+	D[v0] = 0;
+	final[v0] = true;
+
+	for (v=0; v < size; v++)
+	{
+		min = INT_INFINITY;
+		for (size_t w = 0; w < size; w++)
+		{
+			if (!final[w]&&D[w]<INT_INFINITY)
+			{
+				k = w;
+				min = D[w];
+			}
+		}
+		final[k] = true;
+
+		for (w = 0; w < size; w++)
+		{
+			if (!final[w]&&(min+abs(matrix[k][w])<=D[w]))
+			{
+				D[w] = min + abs(matrix[k][w]);
+				P[w] = k;
+			}
+		}
+	}
 }

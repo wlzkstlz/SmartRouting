@@ -43,7 +43,19 @@ public:
 
 	void RecognizeACLocation();
 
+	void CheckIsCloseToMainTube();
+
 	void ShowResult();
+
+	void CreateConnectiveMatrix();
+
+	void SolveShortestPathProblem();
+
+	void ShowShortestPaths();
+
+private:
+	void ShortestPath_Dijkstra(int size,int v0, int** matrix, int*P, int *D);
+
 public:
 	Mat mSourceMat;
 	Mat mMat4Draw;
@@ -70,7 +82,7 @@ public:
 
 	//图数据结构
 public:
-	vector<Point>***mConectiveEdges;// [mNodeSize][mNodeSize];//邻接矩阵
-
+	//vector<Point>***mConectiveEdges;// [mNodeSize][mNodeSize];//邻接矩阵
+	int** mConnectiveMatrix;//邻接矩阵
 };
 

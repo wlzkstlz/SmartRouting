@@ -1,4 +1,4 @@
-#include"Graph.h"
+//#include"Graph.h"
 #include "KeyDataStruct.h"
 #include "SmartRouting.h"
 using namespace cv;
@@ -27,7 +27,7 @@ void main()
 {
 	//【1】读取原图
 	CSmartRouting smartRouting;
-	smartRouting.ReadSourceImg("test.bmp");
+	smartRouting.ReadSourceImg("D:\\git_hub\\SmartRouting\\GrauphTest\\test.bmp");
 
 	/*UI*/
 	{
@@ -164,6 +164,12 @@ void main()
 	//【6】识别AC 关键点
 	smartRouting.RecognizeACLocation();
 	smartRouting.ShowResult();
+
+	//【7】生成管道设计
+	smartRouting.CheckIsCloseToMainTube();
+	smartRouting.CreateConnectiveMatrix();
+	smartRouting.SolveShortestPathProblem();
+	smartRouting.ShowShortestPaths();
 }
 
 void on_mouse(int event, int x, int y, int flags, void *ustc)
